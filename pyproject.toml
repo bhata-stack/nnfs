@@ -1,0 +1,4 @@
+[project]
+name = "nnfs"
+description = "The base components for neural networks created from scratch."
+version = "1.0.0"
