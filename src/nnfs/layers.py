@@ -1,26 +1,16 @@
 import typing as tp
 import numpy as np
 
-from .funcs import ActivationFunc, Sigmoid
+from .funcs import Func, Sigmoid
 
 class Layer:
     """PLACEHOLDER"""
     def __init__(
         self,
-        params: tp.Dict[str, tp.Union[tp.Tuple[int], np.ndarray]],
-        input_shape: tp.Tuple[int],
-        output_shape: tp.Tuple[int],
+        input_shape: tp.Union[tp.Tuple[int], int],
+        output_shape: tp.Union[tp.Tuple[int], int],
         **kwargs,
     ):
-        # Initialize params if not given array directly
-        self.params = {}
-        for key, value in params.items():
-            if isinstance(value, tuple):
-                range_val = 1 / np.sqrt(np.sum(value))
-            else:
-                self.params[key] = value
-            self.params[key] = np.random.uniform(-range_val, range_val, value)
-
         # Set input and output shape of layer
         self.input_shape = input_shape
         self.output_shape = output_shape
@@ -41,27 +31,28 @@ class LinearLayer(Layer):
 
     def __init__(
         self,
-        params: tp.Dict[str, tp.Union[tp.Tuple[int], np.ndarray]],
         input_shape: tp.Tuple[int],
         output_shape: tp.Tuple[int],
-        activation_func: ActivationFunc = Sigmoid,
+        activation_func: Func = Sigmoid(),
         **kwargs,
     ):
         # Initialize from BaseLayer
-        super().__init__(params, input_shape, output_shape, **kwargs)
+        super().__init__(input_shape, output_shape, **kwargs)
+
+        # Determine parameter shapes from input
+        weight_shape_1 = output_shape if isinstance(output_shape, int) else output_shape[-1]
+        weight_shape_2 = input_shape if isinstance(input_shape, int) else input_shape[-1]
+        weight_shape = (weight_shape_1, weight_shape_2)
+
+        bias_shape_2 = output_shape if isinstance(output_shape, int) else output_shape[-1]
+        if isinstance(input_shape, int):
+            bias_shape = bias_shape_2
+        else:
+            bias_shape = (*input_shape[:-1], bias_shape_2)
 
         # Set parameters
-        self.weight = params["weight"]
-        self.bias = params["bias"]
-
-        # Check that input and output shape match with params shape
-        weight_shape = (input_shape[-1], output_shape[-1])
-        if len(input_shape == 1):
-            bias_shape = (output_shape[-1])
-        else:
-            bias_shape = (*input_shape[:-1], output_shape[-1])
-        if weight_shape != self.weight.shape or bias_shape != self.bias.shape:
-            raise RuntimeError("Input and Output shapes do not match parameter shapes.")
+        self.weight = np.random.standard_normal(weight_shape).astype(np.float32)
+        self.bias = np.random.standard_normal(bias_shape).astype(np.float32)
 
         self.nl_func = activation_func
 
@@ -69,10 +60,14 @@ class LinearLayer(Layer):
     def forward(self, input_arr: np.ndarray) -> np.ndarray:
 
         # Check if batching, apply weight and bias
-        if input_arr.shape == self.input_shape:
-            linear_out = input_arr @ self.weight + self.bias
+        if input_arr.ndim == 1:
+            batching = input_arr.shape[0] == self.input_shape
         else:
-            linear_out = input_arr @ self.weight + self.bias[np.newaxis, ...]
+            batching = input_arr.shape == self.input_shape
+        if batching:
+            linear_out = self.weight @ input_arr + self.bias
+        else:
+            linear_out = np.einsum('ij,kj->ki', self.weight, input_arr) + self.bias[np.newaxis, ...]
 
         # Apply nonlinear activation function
         out = self.nl_func.forward(linear_out)
@@ -89,11 +84,11 @@ class LinearLayer(Layer):
         update_weights = kwargs.get("update_weights", True)
 
         # Derivative of activation function evaluated at output
-        deriv = self.nl_func.deriv(self.nl_out)
+        deriv = self.nl_func.deriv(self.l_out)
         delta_tot = delta_arr * deriv
 
         # Calculate gradient in weight and bias
-        d_weight = np.multiply.outer(self.l_in, delta_tot)
+        d_weight = np.einsum('ij,ik->ijk', delta_tot, self.l_in)
         d_bias = delta_tot
 
         # Calculate gradient over batch
@@ -108,8 +103,6 @@ class LinearLayer(Layer):
             self.weight -= eta * d_weight
             self.bias -= eta * d_bias
 
-        delta_out = self.weight @ delta_tot
+        delta_out = delta_tot @ self.weight
 
         return delta_out
-
-
