@@ -2,6 +2,7 @@ import typing as tp
 import numpy as np
 
 class Func:
+    """The generic base class for activation and loss functions."""
     def __init__(self):
         pass
 
@@ -35,6 +36,7 @@ class SoftMax(Func):
     def __init__(self, passthrough = False):
         super().__init__()
 
+        # For certain loss functions, the derivative includes the softmax
         if passthrough:
             self.deriv = lambda x: x
         else:
@@ -45,9 +47,10 @@ class SoftMax(Func):
         return exp_arr / np.sum(exp_arr, axis=1, keepdims=True)
 
     def _jacob_deriv(self, arr: np.ndarray) -> np.ndarray:
+        """The Jacobian of the SoftMax evaluated at the provided array."""
         softmax_arr = self.forward(arr)
-        # TODO: fix the diag for (batch_size, class) -> (batch_size, class, class)
-        return np.diag(softmax_arr) - np.einsum('ij,ik->ijk', softmax_arr, softmax_arr)
+        diag_softmax = np.array([np.diag(arr) for arr in softmax_arr])
+        return diag_softmax - np.einsum('ij,ik->ijk', softmax_arr, softmax_arr)
 
 class MSE(Func):
     def __init__(self):
@@ -68,9 +71,4 @@ class CrossEntropy(Func):
 
     def deriv(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         return x - y
-
-
-class Optimizer:
-    def __init__(self):
-        pass
 
