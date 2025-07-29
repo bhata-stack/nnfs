@@ -48,10 +48,14 @@ class BaseModel:
         # Print model size
         if print_out:
             size_gb = self.param_size / (1024**3)
+            size_mb = self.param_size / (1024**2)
+            size_kb = self.param_size / 1024
             if size_gb > 1:
                 size = f"{size_gb:.1f} GB"
+            elif size_mb > 1:
+                size = f"{size_mb:.1f} MB"
             else:
-                size = f"{self.param_size / (1024**2):.1f} MB"
+                size = f"{size_kb:.1f} KB"
             print(f"Initialized model with {self.n_params} parameters ({size}).")
 
 
