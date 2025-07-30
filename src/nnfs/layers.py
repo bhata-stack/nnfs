@@ -167,12 +167,27 @@ class Conv2DLayer(Layer):
         activation_func: Func = Sigmoid(),
         **kwargs,
     ):
+        """Initialize the 2D convolution layer with appropriate input, output,
+        and filter shapes, including padding settings.
+
+        Args:
+            input_shape (tp.Tuple[int]): A tuple of the input shape.
+            output_shape (tp.Tuple[int]): A tuple of the output shape.
+            filter_shape (tp.Tuple[int]): A tuple of the filter shape.
+            activation_func (Func, optional): The nonlinear activation function,
+            defaults to Sigmoid().
+            padding (bool, optional): Whether or not to pad the input, defaults
+            to False.
+            pad_value (float, optional): The padding value to use if padding,
+            defaults to 0.0.
+        """
+
         # Initialize from BaseLayer
         super().__init__(input_shape, output_shape, **kwargs)
 
         # Extract kwargs
         self.padding = kwargs.get("padding", False)
-        self.pad_value = kwargs.get("pad_value", 0)
+        self.pad_value = kwargs.get("pad_value", 0.0)
 
         # Validate input and output shapes
         if (len(input_shape) != 2) or (len(output_shape) != 2):
@@ -208,9 +223,19 @@ class Conv2DLayer(Layer):
         # Set activation function
         self.nl_func = activation_func
 
-
     def forward(self, input_arr: np.ndarray, batching: bool = True) -> np.ndarray:
+        """Given an input array (batched or otherwise), perform a
+        convolution using the trainable filter.
 
+        Args:
+            input_arr (np.ndarray): The input for the convolution.
+            batching (bool): Whether or not the input is batched, defaults
+            to True.
+
+        Returns:
+            np.ndarray: The result of the convolution.
+        """
+        # Copy input as to not change it via padding
         arr = input_arr.copy()
 
         # Check if batching, apply 2D convolution
@@ -224,9 +249,11 @@ class Conv2DLayer(Layer):
                 )
                 arr = np.pad(arr, pad_shape, mode = "constant", constant_values = self.pad_value)
 
+            # Perform convolution
             wind_view = sliding_window_view(arr, self.filter.shape, axis = (1, 2))
             conv_out = np.einsum('ij,hklij->hkl', self.filter, wind_view)
         else:
+            # Adjust for padding
             if self.padding:
                 pad_shape = (
                     (self.pad_height, self.pad_height),
@@ -234,6 +261,7 @@ class Conv2DLayer(Layer):
                 )
                 arr = np.pad(arr, pad_shape, mode = "constant", constant_values = self.pad_value)
 
+            # Perform convolution
             wind_view = sliding_window_view(arr, self.filter.shape)
             conv_out = np.einsum('ij,klij->kl', self.filter, wind_view)
 
@@ -248,8 +276,23 @@ class Conv2DLayer(Layer):
 
 
     def backward(self, grad_arr: np.ndarray, **kwargs) -> np.ndarray:
+        """Given a gradient array of the output, perform a backward
+        pass and optionally update the convolution filter of the layer.
 
+        Args:
+            grad_arr (np.ndarray): The loss gradient with respect to the
+            output of the layer.
+            batching (bool): Whether or not the input is batched, defaults
+            to True.
+            update_weights (bool): Whether or not to update the filter,
+            defaults to True.
 
+        Returns:
+            np.ndarray: The loss gradient with respect to the input of the
+            layer.
+        """
+
+        # Extract kwargs
         batching = kwargs.get("batching", True)
         update_weights = kwargs.get("update_weights", True)
 
@@ -275,7 +318,6 @@ class Conv2DLayer(Layer):
 
         # Update loss gradient for next layer
         rotated_filter = self.filter[::-1, ::-1]
-        # Apply full convolution
         if batching:
             pad_shape = (
                 (0, 0),
@@ -283,6 +325,7 @@ class Conv2DLayer(Layer):
                 (self.back_pad_width, self.back_pad_width)
             )
             pad_conv_grad = np.pad(conv_grad, pad_shape, mode = "constant", constant_values = 0)
+            # Apply full convolution
             wind_view = sliding_window_view(pad_conv_grad, rotated_filter.shape, axis = (1, 2))
             input_grad = np.einsum('ij,hklij->hkl', rotated_filter, wind_view)
         else:
@@ -291,6 +334,7 @@ class Conv2DLayer(Layer):
                 (self.back_pad_width, self.back_pad_width)
             )
             pad_conv_grad = np.pad(conv_grad, pad_shape, mode = "constant", constant_values = 0)
+            # Apply full convolution
             wind_view = sliding_window_view(pad_conv_grad, rotated_filter.shape)
             input_grad = np.einsum('ij,klij->kl', rotated_filter, wind_view)
 
@@ -309,13 +353,21 @@ class Conv2DLayer(Layer):
         return None
 
 class FlattenLayer(Layer):
-
+    """A layer that flattens the input into a 1D array."""
     def __init__(
         self,
         input_shape: tp.Tuple[int],
         output_shape: tp.Tuple[int],
         **kwargs,
     ):
+        """Initialize the properties of the layer.
+
+        Args:
+            input_shape (tp.Tuple[int]): A tuple of the input shape, should
+            be of length greater than one.
+            output_shape (tp.Tuple[int]): A tuple of the output shape, should
+            be of length one.
+        """
         # Initialize from BaseLayer
         super().__init__(input_shape, output_shape, **kwargs)
 
@@ -332,6 +384,17 @@ class FlattenLayer(Layer):
         self.param_size = 0
 
     def forward(self, input_arr: np.ndarray, batching: bool = True) -> np.ndarray:
+        """Given an input array (batched or otherwise), flatten it
+        to a 1D output.
+
+        Args:
+            input_arr (np.ndarray): The input to be flattened.
+            batching (bool): Whether or not the input is batched, defaults
+            to True.
+
+        Returns:
+            np.ndarray: The flattened array.
+        """
 
         # Check if batching
         if batching:
@@ -344,6 +407,19 @@ class FlattenLayer(Layer):
         return output_arr
 
     def backward(self, grad_arr: np.ndarray, **kwargs) -> np.ndarray:
+        """Given a gradient array of the output, perform a backward
+        pass to reshape it into the input shape.
+
+        Args:
+            grad_arr (np.ndarray): The loss gradient with respect to the
+            output of the layer.
+            batching (bool): Whether or not the input is batched, defaults
+            to True.
+            defaults to True.
+
+        Returns:
+            np.ndarray: The loss gradient reshaped to the input shape.
+        """
 
         # Unpack kwargs
         batching = kwargs.get("batching", True)

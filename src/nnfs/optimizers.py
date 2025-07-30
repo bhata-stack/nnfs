@@ -20,9 +20,11 @@ class Optimizer:
 
         return None
 
+    # Method to determine parameter update, unique to optimizer
     def update_grad(self, grad: np.ndarray, **kwargs) -> np.ndarray:
         raise NotImplementedError()
 
+    # Method to reset internal parameters
     def reset_optimizer(self) -> None:
         raise NotImplementedError()
 
@@ -49,6 +51,9 @@ class SGD(Optimizer):
 
 
 class Adam(Optimizer):
+    """The Adam optimizer maintains the first and second moments of the
+    parameter gradient, allowing for a more controlled gradient descent
+    strategy."""
     def __init__(
         self,
         learning_rate: float = 0.001,
@@ -56,6 +61,18 @@ class Adam(Optimizer):
         beta_2: float = 0.999,
         eps: float = 1e-8,
     ):
+        """Initialize the optimizer with constants.
+
+        Args:
+            learning_rate (float, optional): The learning rate multiplier on
+            the adjusted gradient, defaults to 0.001.
+            beta_1 (float, optional): Constant used for calculating the first
+            moment, defaults to 0.9.
+            beta_2 (float, optional): Constant used for calculating the second
+            moment, defaults to 0.999.
+            eps (float, optional): A small number used to avoid dividing by
+            zero in the adjusted moment calculations, defaults to 1e-8.
+        """
         # Initialize with learning rate
         super().__init__(learning_rate)
 
@@ -64,9 +81,17 @@ class Adam(Optimizer):
         self.beta_2 = beta_2
         self.eps = eps
 
+        # Set internal time step, used for counting iterations
         self.t_step = 1
 
     def set_layer_params(self, layers: tp.Iterable[Layer]) -> None:
+        """Initialize the first and second moments for each of the
+        trainable parameters of the model layers.
+
+        Args:
+            layers (tp.Iterable[Layer]): A list of layers to extract
+            trainable parameter shapes from.
+        """
 
         # Set layer_params property
         super().set_layer_params(layers)
@@ -78,7 +103,6 @@ class Adam(Optimizer):
             param_dict = {key: np.zeros(shape) for key, shape in params.items()}
             self.first_moment.append(param_dict.copy())
             self.second_moment.append(param_dict)
-
 
     def update_grad(self, grad: np.ndarray, param: str, layer_num: int, **kwargs) -> np.ndarray:
         """Returns the adjustment to the parameter based on the gradient. For
@@ -111,6 +135,13 @@ class Adam(Optimizer):
         return param_update
 
     def reset_optimizer(self, t_step_only: bool = False) -> None:
+        """Reset the internal first and second moments (optionally)
+        and the time step.
+
+        Args:
+            t_step_only (bool, optional): Whether or not to only reset
+            the t_step property, defaults to False.
+        """
 
         if not t_step_only:
             for fm, sm in zip(self.first_moment, self.second_moment):
