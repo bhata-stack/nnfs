@@ -180,6 +180,9 @@ class BaseModel:
                 # Update weights
                 input_grad = self.backward(output_grad)
 
+            # Reset optimizer
+            self.optimizer.reset_optimizer()
+
             # Print loss on testing set
             if full_test:
                 test_output = self.forward(x_test)

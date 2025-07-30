@@ -129,8 +129,14 @@ class LinearLayer(Layer):
 
         # Use optimizer to calculate change in parameters
         if update_weights:
-            self.weight -= self.optimizer.update_grad(d_weight, param = "weight")
-            self.bias -= self.optimizer.update_grad(d_bias, param = "bias")
+            weight_update = self.optimizer.update_grad(
+                d_weight, param="weight", layer_num=self.layer_num
+            )
+            self.weight -= weight_update
+            bias_update = self.optimizer.update_grad(
+                d_bias, param="bias", layer_num=self.layer_num
+            )
+            self.bias -= bias_update
 
         # Update loss gradient for next layer
         delta_out = grad_tot @ self.weight
@@ -262,7 +268,10 @@ class Conv2DLayer(Layer):
 
         # Use optimizer to calculate change in parameters
         if update_weights:
-            self.filter -= self.optimizer.update_grad(filter_grad, param = "filter")
+            filter_update = self.optimizer.update_grad(
+                filter_grad, param="filter", layer_num=self.layer_num
+            )
+            self.filter -= filter_update
 
         # Update loss gradient for next layer
         rotated_filter = self.filter[::-1, ::-1]
